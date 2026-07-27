@@ -63,13 +63,13 @@ export const PrefixWrapper = styled.div<{
   disabled?: boolean;
 }>`
   display: flex;
-  order: 1;
+  order: 5;
   ${(props) => (props.visible ? visibleElementStyle() : hiddenElementStyle())};
   transition: opacity ${TRANSITION_FN};
   margin-top: -7px;
   margin-bottom: -7px;
-  margin-left: -4px;
-  margin-right: 12px;
+  margin-left: 12px;
+  margin-right: -4px;
   align-items: center;
 `;
 export const Highlight = styled.span``;
