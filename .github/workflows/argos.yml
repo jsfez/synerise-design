@@ -1,0 +1,69 @@
+name: Argos Visual Testing
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # Argos authenticates with a short-lived OIDC token, so there is no secret to
+  # store for this workflow.
+  id-token: write
+
+jobs:
+  argos:
+    name: Run Argos
+    # `playwright install --with-deps` still asks for libasound2, which noble
+    # renamed, so 24.04 breaks the install step before any capture.
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Argos walks the commit history to resolve the baseline build.
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # `--no-frozen-lockfile` so `pnpm-lock.yaml` stays exactly as it is on
+      # master: the fork cannot reach the internal registry, so the one private
+      # dependency is dropped from package.json and the lockfile is left alone.
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      # `CopyIcon.stories.tsx` is the one story that imports a component through
+      # its package entry point instead of its source, so that single package
+      # has to be built before the Storybook build can resolve it.
+      - name: Build the packages Storybook resolves from dist
+        run: pnpm --filter "@synerise/ds-copy-icon..." run build
+
+      - name: Build Storybook
+        run: pnpm build-storybook
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+
+      # Argos and Playwright live in `argos/`, installed with npm, so
+      # package.json, pnpm-lock.yaml and pnpm-workspace.yaml are left untouched.
+      - name: Install Argos dependencies
+        run: npm install --prefix argos --no-audit --no-fund
+
+      - name: Install Playwright browser
+        run: argos/node_modules/.bin/playwright install chromium --with-deps
+
+      - name: Run Argos
+        run: argos/node_modules/.bin/playwright test --config argos/playwright.config.ts
